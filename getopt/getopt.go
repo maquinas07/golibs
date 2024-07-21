@@ -22,8 +22,8 @@ func (a *Args) GetParams() []string {
 }
 
 func AddFlag(shortName rune, longName string, p *bool) {
-    f := &flag{
-        option: option{
+	f := &flag{
+		option: option{
 			shortName: shortName,
 			longName:  longName,
 		},
@@ -31,12 +31,11 @@ func AddFlag(shortName rune, longName string, p *bool) {
 	}
 	expectedArgs.expectedShort[shortName] = f
 	expectedArgs.expectedLong[longName] = f
-	return
 }
 
 func AddOption(shortName rune, longName string, p interface{}, isOptional bool, valueParser ValueParser) {
-    o := &valuedOption{
-        option: option {
+	o := &valuedOption{
+		option: option{
 			shortName: shortName,
 			longName:  longName,
 		},
@@ -46,11 +45,13 @@ func AddOption(shortName rune, longName string, p interface{}, isOptional bool, 
 	}
 	expectedArgs.expectedShort[shortName] = o
 	expectedArgs.expectedLong[longName] = o
-	return
 }
 
 func Parse() (a *Args, err error) {
-	args := os.Args
+	return parse(os.Args)
+}
+
+func parse(args []string) (a *Args, err error) {
 	a = &Args{
 		program: args[0],
 	}
@@ -59,42 +60,39 @@ func Parse() (a *Args, err error) {
 		arg := args[i]
 		if arg[0] == '-' {
 			if arg[1] == '-' {
-				i := strings.IndexRune(arg, '=')
+				kv := strings.IndexRune(arg, '=')
 				var value string
-				if i > 0 {
-					arg = arg[:i]
-					value = arg[i+1:]
+				if kv > 0 {
+					value = arg[kv+1:]
+					arg = arg[:kv]
 				}
-				opt := expectedArgs.expectedLong[arg]
-
+				opt := expectedArgs.expectedLong[arg[2:]]
 				if opt != nil {
-					valueOpt, ok := opt.(*valuedOption)
+					flag, ok := opt.(*flag)
 					if ok {
-						if value != "" {
-							err = valueOpt.setValue(value)
-                            if err != nil {
-                                return
-                            }
-						} else if !valueOpt.isOptional && i < 0 {
+						flag.set()
+					} else {
+						valueOpt, ok := opt.(*valuedOption)
+						if !ok {
+							a.params = append(a.params, arg)
+							continue
+						}
+						if value == "" && !valueOpt.isOptional && kv < 0 {
 							if len(args) < i+2 {
 								err = fmt.Errorf("missing argument value")
 								return
 							}
 							i++
-							valueOpt.setValue(args[i])
-							continue
+							value = args[i]
 						}
-					} else {
-						flag, ok := opt.(*flag)
-						if !ok {
-							a.params = append(a.params, arg)
-							continue
+						err = valueOpt.setValue(value)
+						if err != nil {
+							return
 						}
-						flag.set()
 					}
 				}
 			} else {
-				for j, r := range arg {
+				for _, r := range arg[1:] {
 					opt := expectedArgs.expectedShort[r]
 					if opt != nil {
 						flag, ok := opt.(*flag)
@@ -106,19 +104,16 @@ func Parse() (a *Args, err error) {
 								a.params = append(a.params, arg)
 								continue
 							}
-							value := arg[j+1:]
-							if value == "" && !valueOpt.isOptional {
-								if len(args) < i+2 {
-									err = fmt.Errorf("missing argument value")
-									return
-								}
-								i++
-								value = args[i]
+							if !valueOpt.isOptional && len(args) < i+2 {
+								err = fmt.Errorf("missing argument value")
+								return
 							}
-							err = valueOpt.setValue(value)
-                            if err != nil {
-                                return
-                            }
+							i++
+							err = valueOpt.setValue(args[i])
+							if err != nil {
+								return
+							}
+							break
 						}
 					}
 				}

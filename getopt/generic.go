@@ -21,7 +21,7 @@ func (o *valuedOption) setValue(value string) (err error) {
 	} else {
 		switch o.value.(type) {
 		case *string:
-			o.value = &value
+			*(o.value.(*string)) = value
 		default:
 			err = errors.New("type is not supported")
 		}
